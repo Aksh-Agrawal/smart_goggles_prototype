@@ -10,13 +10,15 @@ import queue
 import logging
 
 class SpeechModule:
-    def __init__(self, use_gtts=False):
+    def __init__(self, use_gtts=False, language="en-IN"):
         """
         Initialize speech recognition and text-to-speech modules
         
         Args:
             use_gtts (bool): Whether to use gTTS (True) or pyttsx3 (False) for TTS
+            language (str): Language code for speech (default: Indian English)
         """
+        self.language = language
         self.recognizer = sr.Recognizer()
         self.use_gtts = use_gtts
         self.speech_queue = queue.Queue()
@@ -31,11 +33,23 @@ class SpeechModule:
                 self.engine = pyttsx3.init()
                 self.engine.setProperty('rate', 180)  # Adjust speaking rate
                 voices = self.engine.getProperty('voices')
-                # Set a female voice if available
+                
+                # First try to find an Indian English voice
+                indian_voice_found = False
                 for voice in voices:
-                    if "female" in voice.name.lower():
+                    if "india" in voice.name.lower() or "hindi" in voice.name.lower():
                         self.engine.setProperty('voice', voice.id)
+                        indian_voice_found = True
+                        logging.info(f"Using Indian voice: {voice.name}")
                         break
+                
+                # If no Indian voice, fallback to female voice
+                if not indian_voice_found:
+                    for voice in voices:
+                        if "female" in voice.name.lower():
+                            self.engine.setProperty('voice', voice.id)
+                            logging.info(f"Using female voice: {voice.name}")
+                            break
             except Exception as e:
                 logging.error(f"Error initializing pyttsx3: {e}")
                 self.use_gtts = True  # Fallback to gTTS
@@ -80,11 +94,16 @@ class SpeechModule:
         """
         try:
             if self.use_gtts:
-                # Use Google Text-to-Speech
+                # Use Google Text-to-Speech with preferred language (default: Indian English)
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp_file:
                     temp_filename = tmp_file.name
                 
-                tts = gTTS(text=text, lang='en')
+                # Parse the language code to get the base language
+                lang_base = self.language.split('-')[0] if '-' in self.language else self.language
+                # Use Indian TLD for Indian English
+                tld = 'co.in' if self.language.lower() == 'en-in' else 'com'
+                
+                tts = gTTS(text=text, lang=lang_base, tld=tld)
                 tts.save(temp_filename)
                 playsound.playsound(temp_filename)
                 os.remove(temp_filename)
@@ -95,14 +114,14 @@ class SpeechModule:
         except Exception as e:
             logging.error(f"Error in speech synthesis: {e}")
             
-    def listen(self, timeout=5, phrase_time_limit=5, language="en-US"):
+    def listen(self, timeout=5, phrase_time_limit=5, language=None):
         """
         Listen for speech and convert to text
         
         Args:
             timeout (int): How long to wait for speech to start (seconds)
             phrase_time_limit (int): Maximum duration for speech input (seconds)
-            language (str): Language code for speech recognition (default: en-US)
+            language (str): Language code for speech recognition (override instance language)
             
         Returns:
             str: Recognized text or empty string if not recognized
@@ -126,7 +145,9 @@ class SpeechModule:
                     audio = self.recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
                     
                     # Try multiple recognition services in order
-                    text = self._try_multiple_recognition_services(audio, language)
+                    # Use provided language or fall back to instance language
+                    recognition_language = language if language else self.language
+                    text = self._try_multiple_recognition_services(audio, recognition_language)
                     
                     if text:
                         return text.lower()
@@ -145,7 +166,7 @@ class SpeechModule:
                 logging.error(f"Error in speech recognition: {e}")
                 return ""
                 
-    def _try_multiple_recognition_services(self, audio, language="en-US"):
+    def _try_multiple_recognition_services(self, audio, language="en-IN"):
         """
         Try multiple speech recognition services in order of reliability
         
@@ -161,8 +182,8 @@ class SpeechModule:
             # Method 1: Google Web Speech API (most reliable but needs internet)
             lambda: self.recognizer.recognize_google(audio, language=language),
             
-            # Method 2: Try with a different language variant if original is en-US
-            lambda: self.recognizer.recognize_google(audio, language="en-GB") if language == "en-US" else None,
+            # Method 2: Try with a different language variant if original is en-IN
+            lambda: self.recognizer.recognize_google(audio, language="en-GB") if language == "en-IN" else None,
             
             # Method 3: Try Sphinx (offline, less accurate but doesn't need internet)
             lambda: self.recognizer.recognize_sphinx(audio) if hasattr(self.recognizer, 'recognize_sphinx') else None

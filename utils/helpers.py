@@ -28,7 +28,7 @@ def load_config():
         
         # Speech configuration
         "use_gtts": os.getenv("USE_GTTS", "False").lower() in ("true", "1", "yes"),
-        "speech_language": os.getenv("SPEECH_LANGUAGE", "en-US"),
+        "speech_language": os.getenv("SPEECH_LANGUAGE", "en-IN"),
         "speech_recognition_engine": os.getenv("SPEECH_RECOGNITION_ENGINE", "google"),
         
         # OCR configuration

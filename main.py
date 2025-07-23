@@ -56,9 +56,9 @@ class SmartGoggles:
             logging.info("Initializing object detector...")
             self.object_detector = ObjectDetector(model_path=self.config["yolo_model"])
             
-            # Initialize speech module
+            # Initialize speech module with Indian English preference
             logging.info("Initializing speech module...")
-            self.speech = SpeechModule(use_gtts=self.config["use_gtts"])
+            self.speech = SpeechModule(use_gtts=self.config["use_gtts"], language="en-IN")
             
             # Initialize face recognizer
             logging.info("Initializing face recognizer...")
@@ -106,7 +106,7 @@ class SmartGoggles:
                 continue
             
             # Get language from config if available
-            language = self.config.get("speech_language", "en-US")
+            language = self.config.get("speech_language", "en-IN")
                 
             # Listen for command with enhanced parameters
             command = self.speech.listen(
