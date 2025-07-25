@@ -341,16 +341,24 @@ class SmartGoggles:
         """Run the main application loop"""
         self.running = True
         
-        # Initialize camera
-        cap = setup_camera(
-            camera_id=self.config["camera_id"],
-            width=self.config["frame_width"],
-            height=self.config["frame_height"],
-            fps=self.config["fps"]
-        )
+        # First try to initialize camera with ID 1 (external camera)
+        logging.info("Trying to initialize camera with ID 1...")
+        cap = cv2.VideoCapture(1)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.config["frame_width"])
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config["frame_height"])
+        cap.set(cv2.CAP_PROP_FPS, self.config["fps"])
         
+        # If camera 1 is not available, fall back to camera 0
         if not cap.isOpened():
-            self.speech.speak("Failed to open camera. Exiting.")
+            logging.info("Camera ID 1 not available, falling back to camera ID 0...")
+            cap.release()  # Release the failed capture
+            cap = cv2.VideoCapture(0)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.config["frame_width"])
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config["frame_height"])
+            cap.set(cv2.CAP_PROP_FPS, self.config["fps"])
+            
+        if not cap.isOpened():
+            self.speech.speak("Failed to open any camera. Exiting.")
             return
             
             # Welcome message
@@ -407,22 +415,22 @@ class SmartGoggles:
                                     break
                     
                     # Alert if objects are too close, but exclude people (known or unknown)
-                    if proximity_objects and not known_person_close:
-                        close_object_labels = [obj["label"] for obj in proximity_objects]
+                    # if proximity_objects and not known_person_close:
+                    #     close_object_labels = [obj["label"] for obj in proximity_objects]
                         
-                        # Filter out any labels containing "person"
-                        non_person_labels = [label for label in close_object_labels if "person" not in label.lower()]
-                        unique_labels = list(set(non_person_labels))
+                    #     # Filter out any labels containing "person"
+                    #     non_person_labels = [label for label in close_object_labels if "person" not in label.lower()]
+                    #     unique_labels = list(set(non_person_labels))
                         
-                        # Only issue warnings for non-person objects
-                        if unique_labels:
-                            if len(unique_labels) == 1:
-                                self.speech.speak(f"Warning! A {unique_labels[0]} is very close to you!", priority=True)
-                            else:
-                                self.speech.speak("Warning! There are objects very close to you!", priority=True)
+                    #     # Only issue warnings for non-person objects
+                    #     if unique_labels:
+                    #         if len(unique_labels) == 1:
+                    #             self.speech.speak(f"Warning! A {unique_labels[0]} is very close to you!", priority=True)
+                    #         else:
+                    #             self.speech.speak("Warning! There are objects very close to you!", priority=True)
                     
-                    # Store current faces for voice commands
-                    self.current_faces = face_results
+                    # # Store current faces for voice commands
+                    # self.current_faces = face_results
                 
                 # Add command instructions to the frame
                 display_frame = self.add_command_overlay(display_frame)
