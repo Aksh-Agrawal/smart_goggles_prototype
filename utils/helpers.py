@@ -33,7 +33,22 @@ def load_config():
         
         # OCR configuration
         "tesseract_path": os.getenv("TESSERACT_PATH", r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
-        "ocr_api_key": os.getenv("OCR_API_KEY"),
+        # OCR Service Selection
+        "ocr_service": os.getenv("OCR_SERVICE", "tesseract"),
+        "ocr_text_preprocessing": os.getenv("OCR_TEXT_PREPROCESSING", "True").lower() in ("true", "1", "yes"),
+        "ocr_confidence_threshold": int(os.getenv("OCR_CONFIDENCE_THRESHOLD", "40")),
+        
+        # Azure OCR configuration
+        "azure_vision_key": os.getenv("AZURE_VISION_KEY", ""),
+        "azure_vision_endpoint": os.getenv("AZURE_VISION_ENDPOINT", ""),
+        
+        # AWS OCR configuration
+        "aws_access_key": os.getenv("AWS_ACCESS_KEY", ""),
+        "aws_secret_key": os.getenv("AWS_SECRET_KEY", ""),
+        "aws_region": os.getenv("AWS_REGION", "us-east-1"),
+        
+        # Legacy OCR settings (maintained for compatibility)
+        "ocr_api_key": os.getenv("OCR_API_KEY", ""),
         "ocr_ai_service": os.getenv("OCR_AI_SERVICE", "azure"),
         "ocr_ai_endpoint": os.getenv("OCR_AI_ENDPOINT", ""),
         

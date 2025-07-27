@@ -90,7 +90,7 @@ class ObjectDetector:
     
     def _get_dominant_color(self, roi):
         """
-        Get the dominant color in a region
+        Get the dominant color in a region using histogram analysis
         
         Args:
             roi (numpy.ndarray): Region of interest
@@ -99,17 +99,19 @@ class ObjectDetector:
             list: Dominant BGR color
         """
         try:
-            # Reshape the image to be a list of pixels
-            pixels = roi.reshape((-1, 3))
+            # Method 1: Use histogram to find most frequent color ranges
+            hist_b = cv2.calcHist([roi], [0], None, [256], [0, 256])
+            hist_g = cv2.calcHist([roi], [1], None, [256], [0, 256])
+            hist_r = cv2.calcHist([roi], [2], None, [256], [0, 256])
             
-            # Use k-means clustering to find dominant color
-            from sklearn.cluster import KMeans
-            kmeans = KMeans(n_clusters=1, random_state=42, n_init=10)
-            kmeans.fit(pixels)
+            # Find peaks in each channel
+            dominant_b = np.argmax(hist_b)
+            dominant_g = np.argmax(hist_g)
+            dominant_r = np.argmax(hist_r)
             
-            return kmeans.cluster_centers_[0].tolist()
+            return [float(dominant_b), float(dominant_g), float(dominant_r)]
         except:
-            # Fallback to mean color if sklearn is not available
+            # Fallback to mean color
             return np.mean(roi, axis=(0, 1)).tolist()
     
     def _get_object_position(self, box, frame_width, frame_height):

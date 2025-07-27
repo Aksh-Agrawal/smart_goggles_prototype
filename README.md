@@ -10,7 +10,8 @@ A Python-based AI prototype for smart glasses to assist visually impaired users.
 - **Keyboard command interface** with on-screen instructions and text-to-speech
 - **Face recognition** for identifying known individuals
 - **Proximity alerts** for nearby objects
-- **OCR capability** to read text in the environment
+- **Enhanced OCR capability** to read text in the environment with multiple processing methods
+- **Smart text detection** that automatically identifies text-containing objects
 
 ### Additional Features
 
@@ -30,10 +31,10 @@ smart_goggles_prototype/
 │
 └── utils/                    # Utility modules
     ├── __init__.py           # Package initialization
-    ├── object_detection.py   # YOLOv8 object detection module
+    ├── object_detection.py   # YOLOv8 object detection with text detection capabilities
     ├── speech_module.py      # Speech recognition and synthesis
     ├── face_recognition_module.py # Face recognition module
-    ├── ocr_module.py         # Optical Character Recognition
+    ├── ocr_module.py         # Enhanced Optical Character Recognition with multi-method processing
     ├── emergency_system.py   # Emergency alerts
     ├── scene_summarizer.py   # AI-powered scene description
     └── helpers.py            # Utility functions and configuration
@@ -124,7 +125,7 @@ python main.py
 
 - **O** - Detect and describe objects in the center of the field of view
 - **F** - Identify faces in view (only announces unknown people; remains silent for known faces)
-- **R** - Read text visible in the camera view using OCR
+- **R** - Read text visible in the camera view using enhanced OCR with automatic text region detection
 - **S** - Provide an AI-generated description of the scene
 - **E** - Activate emergency mode with alerts
 - **H** - Display help screen with command instructions
@@ -175,6 +176,46 @@ elif key == ord('t'):  # 'T' key for time
 ```
 
 You can also adjust voice settings (speech rate, voice type) in the `SpeechModule` class in `utils/speech_module.py`.
+
+## OCR and Text Detection Features
+
+### Enhanced OCR Capabilities
+
+The Smart Goggles now include advanced OCR processing that:
+
+1. **Automatically detects text-containing regions** in the environment
+2. **Applies multiple preprocessing methods** to improve text recognition:
+   - Standard OCR with preprocessing
+   - Contrast-enhanced processing for difficult lighting
+   - Adaptive thresholding for challenging text
+3. **Integrates with object detection** to identify objects likely to contain text
+4. **Provides visual feedback** highlighting detected text with confidence scores
+
+### Using OCR Mode
+
+1. Press the **R** key to activate OCR mode
+2. Point the camera at text you want to read
+3. Hold the camera steady for 1-2 seconds
+4. The system will:
+   - Highlight detected text regions
+   - Read the text aloud via speech synthesis
+   - Display the detected text on screen
+5. OCR mode remains active for 5-8 seconds (longer if text is detected)
+
+### OCR Configuration
+
+You can customize OCR behavior by editing the `.env` file:
+
+```
+# OCR Service Selection (options: tesseract, azure, aws)
+OCR_SERVICE=tesseract
+
+# API Keys for cloud OCR (if using)
+AZURE_VISION_KEY=your_key_here
+AZURE_VISION_ENDPOINT=your_endpoint_here
+AWS_ACCESS_KEY=your_key_here
+AWS_SECRET_KEY=your_secret_here
+```
 
 ## Troubleshooting
 

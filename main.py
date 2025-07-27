@@ -140,16 +140,24 @@ class SmartGoggles:
         """
         command = command.lower()
         
-        # Check for object detection command
-        if "something" in command and "front" in command:
+        # Check for object detection command - expanded with more natural phrases
+        if ("something" in command and "front" in command) or \
+           ("detect" in command and ("object" in command or "objects" in command)) or \
+           ("what" in command and ("object" in command or "objects" in command or "see" in command)) or \
+           ("identify" in command and ("object" in command or "objects" in command)):
             self.describe_center_objects()
             
         # Check for face recognition mode
-        elif "who" in command and ("there" in command or "front" in command):
+        elif "who" in command and ("there" in command or "front" in command) or \
+             ("detect" in command and ("face" in command or "faces" in command or "person" in command or "people" in command)) or \
+             ("identify" in command and ("person" in command or "people" in command)):
             self.describe_faces()
             
         # Check for OCR mode
-        elif "read" in command and "front" in command:
+        elif "read" in command and "front" in command or \
+             ("read" in command and "text" in command) or \
+             ("ocr" in command) or \
+             ("detect" in command and "text" in command):
             self.current_mode = "ocr"
             self.speech.speak("Switching to OCR mode. Reading text.")
             self.ocr_mode_start_time = time.time()
@@ -173,19 +181,35 @@ class SmartGoggles:
     
     def describe_center_objects(self):
         """Describe objects in the center of the frame"""
-        if not hasattr(self, 'current_center_objects') or not self.current_center_objects:
-            self.speech.speak("I don't see anything in front of you right now.")
+        # First check if we have any detections at all (before checking center)
+        all_detections = getattr(self, 'all_detections', [])
+        
+        # If we don't have current_center_objects but have all_detections, there are objects but none in center
+        if (not hasattr(self, 'current_center_objects') or not self.current_center_objects) and all_detections:
+            # Get the top 3 objects by confidence
+            top_objects = sorted(all_detections, key=lambda x: x.get("confidence", 0), reverse=True)[:3]
+            object_names = [obj["label"] for obj in top_objects]
+            
+            if len(object_names) == 1:
+                self.speech.speak(f"I see a {object_names[0]}, but it's not directly in front of you.")
+            else:
+                object_str = ", ".join(object_names[:-1]) + " and " + object_names[-1]
+                self.speech.speak(f"I see {object_str} in the scene, but nothing directly in front of you.")
+            return
+        elif not hasattr(self, 'current_center_objects') or not self.current_center_objects:
+            self.speech.speak("I don't see any objects in front of you right now.")
             return
             
+        # If we have center objects, describe them
         objects = [obj["label"] for obj in self.current_center_objects]
         if objects:
             if len(objects) == 1:
-                self.speech.speak(f"I see a {objects[0]} in front of you.")
+                self.speech.speak(f"I see a {objects[0]} directly in front of you.")
             else:
                 object_str = ", ".join(objects[:-1]) + " and " + objects[-1]
                 self.speech.speak(f"I see {object_str} in front of you.")
         else:
-            self.speech.speak("I don't see anything specific in front of you right now.")
+            self.speech.speak("I don't see anything specific directly in front of you right now.")
     
     def describe_faces(self):
         """Describe detected faces"""
@@ -322,7 +346,7 @@ class SmartGoggles:
     
     def process_ocr(self, frame):
         """
-        Process OCR on the current frame
+        Process OCR on the current frame with enhanced object detection integration
         
         Args:
             frame (numpy.ndarray): Current frame
@@ -334,8 +358,8 @@ class SmartGoggles:
             # Store the frame time to avoid repeated OCR on same frame
             current_time = time.time()
             
-            # More frequent OCR processing (every 1 second instead of 3)
-            if hasattr(self, 'last_ocr_time') and current_time - self.last_ocr_time < 1:
+            # More frequent OCR processing (every 0.8 seconds)
+            if hasattr(self, 'last_ocr_time') and current_time - self.last_ocr_time < 0.8:
                 # Just return the previously highlighted frame if available
                 if hasattr(self, 'last_highlighted_frame'):
                     return self.last_highlighted_frame
@@ -346,21 +370,49 @@ class SmartGoggles:
             # Log OCR processing
             logging.info("Processing OCR on current frame")
             
-            # Prepare the frame for better text detection
-            # 1. Create a copy for processing
-            ocr_frame = frame.copy()
+            # Use either standard OCR or enhanced object-detection based OCR
+            use_enhanced_method = True  # Can be made configurable
             
-            # 2. Optional: Adjust contrast and brightness for better text visibility
-            alpha = 1.3  # Contrast control (1.0-3.0)
-            beta = 10    # Brightness control (0-100)
-            adjusted_frame = cv2.convertScaleAbs(ocr_frame, alpha=alpha, beta=beta)
+            if use_enhanced_method:
+                # Use the new object detection-based text recognition
+                text_results, highlighted_frame = self.object_detector.extract_text_from_regions(frame, self.ocr)
+                text = text_results["full_text"]
+                
+                # Store regions for possible use in navigation
+                self.last_text_regions = text_results["regions"]
+                
+                # Add overlay information
+                if text:
+                    # Add a semi-transparent overlay at the bottom for the detected text
+                    overlay = highlighted_frame.copy()
+                    h, w = highlighted_frame.shape[:2]
+                    cv2.rectangle(overlay, (0, h-60), (w, h), (0, 0, 0), -1)
+                    cv2.addWeighted(overlay, 0.7, highlighted_frame, 0.3, 0, highlighted_frame)
+                    
+                    # Display the text
+                    text_to_display = text[:80] + "..." if len(text) > 80 else text
+                    cv2.putText(highlighted_frame, text_to_display, (10, h-20),
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                
+            else:
+                # Original method with enhancements
+                # Prepare the frame for better text detection
+                ocr_frame = frame.copy()
+                
+                # Adjust contrast and brightness for better text visibility
+                alpha = 1.3  # Contrast control (1.0-3.0)
+                beta = 10    # Brightness control (0-100)
+                adjusted_frame = cv2.convertScaleAbs(ocr_frame, alpha=alpha, beta=beta)
+                
+                # Extract text from the enhanced frame with advanced processing
+                text = self.ocr.extract_text(adjusted_frame, preprocess=True, use_enhanced_ocr=True)
+                
+                # Highlight text areas in the frame with confidence visualization
+                highlighted_frame, text_boxes = self.ocr.highlight_text_areas(frame, confidence_threshold=40, show_confidence=True)
             
-            # Extract text from the enhanced frame with advanced processing
-            text = self.ocr.extract_text(adjusted_frame, preprocess=True, use_enhanced_ocr=True)
-            
-            # Highlight text areas in the frame with confidence visualization
-            # Lower threshold to catch more potential text (40 instead of 50)
-            highlighted_frame, text_boxes = self.ocr.highlight_text_areas(frame, confidence_threshold=40, show_confidence=True)
+            # For standard method, highlight text areas now since not done above
+            if not use_enhanced_method:
+                highlighted_frame, text_boxes = self.ocr.highlight_text_areas(frame, confidence_threshold=40, show_confidence=True)
             
             # Create a visual indicator that OCR mode is active
             cv2.rectangle(highlighted_frame, (0, 0), (highlighted_frame.shape[1], 40), (0, 0, 200), -1)
@@ -377,22 +429,21 @@ class SmartGoggles:
             if text and len(text) > 2:  # Even short texts can be important (e.g., "GO", "NO")
                 # Avoid speaking the same text repeatedly
                 if not hasattr(self, 'last_spoken_text') or text != self.last_spoken_text:
-                    # Visualize the detected text more prominently
-                    text_display = highlighted_frame.copy()
-                    
-                    # Create a semi-transparent text box
-                    overlay = highlighted_frame.copy()
-                    cv2.rectangle(overlay, (0, highlighted_frame.shape[0] - 60), 
-                                 (highlighted_frame.shape[1], highlighted_frame.shape[0]), 
-                                 (0, 0, 0), -1)
-                    
-                    # Blend the overlay with the original frame
-                    cv2.addWeighted(overlay, 0.7, highlighted_frame, 0.3, 0, highlighted_frame)
-                    
-                    # Add text overlay to the frame with larger, more visible font
-                    cv2.putText(highlighted_frame, "TEXT: " + text[:50], 
-                                (10, highlighted_frame.shape[0] - 20), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
+                    # Text overlay is already added for enhanced method, only add for standard method
+                    if not use_enhanced_method:
+                        # Create a semi-transparent text box
+                        overlay = highlighted_frame.copy()
+                        cv2.rectangle(overlay, (0, highlighted_frame.shape[0] - 60), 
+                                     (highlighted_frame.shape[1], highlighted_frame.shape[0]), 
+                                     (0, 0, 0), -1)
+                        
+                        # Blend the overlay with the original frame
+                        cv2.addWeighted(overlay, 0.7, highlighted_frame, 0.3, 0, highlighted_frame)
+                        
+                        # Add text overlay to the frame with larger, more visible font
+                        cv2.putText(highlighted_frame, "TEXT: " + text[:50], 
+                                    (10, highlighted_frame.shape[0] - 20), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
                     
                     # Speak the detected text
                     self.speech.speak(f"I see text that says: {text}")
@@ -474,21 +525,66 @@ class SmartGoggles:
                 
                 # Process frame based on current mode
                 if self.current_mode == "ocr":
-                    # Process frame with OCR
+                    # Process frame with OCR and enhanced object-based text detection
                     display_frame = self.process_ocr(frame)
-                    # Don't reset mode immediately - allow for multiple frames of OCR processing
-                    # The mode will be reset after 5 seconds
+                    
+                    # Check if OCR mode should be maintained or reset
                     if not hasattr(self, 'ocr_mode_start_time'):
                         self.ocr_mode_start_time = time.time()
-                    elif time.time() - self.ocr_mode_start_time > 5:  # 5 second OCR mode
+                        # Reset spoken flags when entering OCR mode
+                        self.no_text_spoken = False
+                        self.second_hint_given = False
+                        
+                    # Keep OCR mode active for 5-8 seconds (configurable) to give time for proper text analysis
+                    ocr_duration = 5  # Default duration in seconds
+                    
+                    # If text was detected, extend the OCR mode duration to allow for better analysis
+                    if hasattr(self, 'last_spoken_text') and self.last_spoken_text:
+                        # Extend OCR mode if text was detected
+                        ocr_duration = 8
+                        
+                    # Exit OCR mode after the specified duration
+                    if time.time() - self.ocr_mode_start_time > ocr_duration:
                         self.current_mode = "normal"
                         self.speech.speak("Exiting OCR mode.")
+                        # Clean up OCR mode attributes
                         if hasattr(self, 'ocr_mode_start_time'):
                             delattr(self, 'ocr_mode_start_time')
+                        if hasattr(self, 'no_text_spoken'):
+                            delattr(self, 'no_text_spoken')
+                        if hasattr(self, 'second_hint_given'):
+                            delattr(self, 'second_hint_given')
+                        if hasattr(self, 'last_spoken_text'):
+                            delattr(self, 'last_spoken_text')
                 else:
-                    # Run object detection
-                    detections, annotated_frame = self.object_detector.detect_objects(frame)
+                    # Run standard object detection in normal mode
+                    # Set a flag to indicate we're looking for text in objects as well
+                    detect_text_in_objects = True
+                    
+                    if detect_text_in_objects:
+                        # Use the enhanced object detection that can find text in objects
+                        detections, annotated_frame = self.object_detector.detect_objects(frame, detect_text=True)
+                        
+                        # Check if any text was detected in objects that might be worth analyzing
+                        if hasattr(self.object_detector, 'last_text_detection') and self.object_detector.last_text_detection:
+                            # If significant text was detected in objects, provide a visual indication
+                            text_indicator_color = (0, 128, 255)  # Orange color for text detection
+                            cv2.circle(annotated_frame, (30, 30), 15, text_indicator_color, -1)
+                            cv2.putText(annotated_frame, "Text Detected", (50, 35), 
+                                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, text_indicator_color, 2)
+                    else:
+                        # Use standard object detection without text analysis
+                        detections, annotated_frame = self.object_detector.detect_objects(frame)
+                    
                     display_frame = annotated_frame
+                    
+                    # Store all detections for voice commands - this allows us to respond even if no center objects
+                    self.all_detections = detections
+                    
+                    # Display the number of detected objects for debugging
+                    if detections:
+                        cv2.putText(display_frame, f"Objects: {len(detections)}", (10, display_frame.shape[0] - 10),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                     
                     # Run face recognition first to identify if people are present
                     face_results = self.face_recognizer.recognize_faces(display_frame)
@@ -500,6 +596,17 @@ class SmartGoggles:
                     
                     # Store current center objects for voice commands
                     self.current_center_objects = center_objects
+                    
+                    # Display the center region for visual reference (optional - for debugging)
+                    show_center_region = getattr(self, 'show_center_region', True)  # Enable by default
+                    if show_center_region:
+                        height, width = frame.shape[:2]
+                        center_x1 = width // 3
+                        center_x2 = 2 * width // 3
+                        center_y1 = height // 3
+                        center_y2 = 2 * height // 3
+                        cv2.rectangle(display_frame, (center_x1, center_y1), (center_x2, center_y2), 
+                                     (255, 255, 255), 1)
                     
                     # Check if a known person is among the close objects
                     known_person_close = False
@@ -536,6 +643,16 @@ class SmartGoggles:
                         self.speech.speak("Exiting OCR mode.")
                         if hasattr(self, 'ocr_mode_start_time'):
                             delattr(self, 'ocr_mode_start_time')
+                    
+                    # Ensure we have the latest detections before describing
+                    if hasattr(self, 'all_detections') and self.all_detections:
+                        # Update center_objects in case they've moved since last detection
+                        center_objects, _ = self.object_detector.get_center_objects(
+                            self.all_detections, self.current_frame, threshold=self.config["proximity_threshold"]
+                        )
+                        self.current_center_objects = center_objects
+                    
+                    # Now describe what we see
                     self.describe_center_objects()
                 elif key == ord('f'):  # Face recognition
                     if self.current_mode == "ocr":
@@ -558,6 +675,10 @@ class SmartGoggles:
                     self.trigger_emergency()
                 elif key == ord('h'):  # Help/Instructions
                     self.show_help()
+                elif key == ord('c'):  # Toggle center region visualization
+                    self.show_center_region = not getattr(self, 'show_center_region', True)
+                    status = "enabled" if getattr(self, 'show_center_region', True) else "disabled"
+                    self.speech.speak(f"Center region visualization {status}")
                     
         except Exception as e:
             logging.error(f"Error in main loop: {e}")
@@ -593,6 +714,7 @@ class SmartGoggles:
             "R: Read Text (OCR)",
             "S: Describe Scene",
             "E: Emergency Alert",
+            "C: Toggle Center Region",
             "H: Show Help",
             "Q: Quit"
         ]
@@ -628,8 +750,16 @@ class SmartGoggles:
         R - Read text in view (OCR mode)
         S - Describe the entire scene
         E - Trigger emergency mode
+        C - Toggle center region visualization
         H - Show this help information
         Q - Quit the application
+        
+        Voice Commands:
+        "Detect objects" - Describe objects in front of you
+        "Who is there" - Identify faces in view
+        "Read text" - Activate OCR mode
+        "What's happening" - Describe the scene
+        "Help me" - Trigger emergency mode
         
         Press any key to close this help screen.
         """
