@@ -33,9 +33,13 @@ def load_config():
         
         # OCR configuration
         "tesseract_path": os.getenv("TESSERACT_PATH", r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
+        "ocr_api_key": os.getenv("OCR_API_KEY"),
+        "ocr_ai_service": os.getenv("OCR_AI_SERVICE", "azure"),
+        "ocr_ai_endpoint": os.getenv("OCR_AI_ENDPOINT", ""),
         
         # Vision AI model configuration
         "vision_model": os.getenv("VISION_MODEL", "gemini"),  # or "openai"
+        "openai_api_key": os.getenv("OPENAI_API_KEY"),
         
         # Camera configuration
         "camera_id": int(os.getenv("CAMERA_ID", "0")),

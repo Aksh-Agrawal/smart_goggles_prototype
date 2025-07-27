@@ -66,7 +66,7 @@ class SmartGoggles:
             
             # Initialize OCR module
             logging.info("Initializing OCR module...")
-            self.ocr = OCRModule(tesseract_path=self.config["tesseract_path"])
+            self.ocr = OCRModule(tesseract_path=self.config["tesseract_path"], api_key=self.config["ocr_api_key"])
             
             # Initialize emergency system
             logging.info("Initializing emergency system...")
@@ -152,6 +152,11 @@ class SmartGoggles:
         elif "read" in command and "front" in command:
             self.current_mode = "ocr"
             self.speech.speak("Switching to OCR mode. Reading text.")
+            self.ocr_mode_start_time = time.time()
+            if hasattr(self, 'no_text_spoken'):
+                delattr(self, 'no_text_spoken')
+            if hasattr(self, 'last_spoken_text'):
+                delattr(self, 'last_spoken_text')
             
         # Check for scene description command
         elif "what's happening" in command or "what is happening" in command or "around me" in command:
@@ -325,17 +330,53 @@ class SmartGoggles:
         Returns:
             numpy.ndarray: Frame with highlighted text regions
         """
-        # Extract text from the frame
-        text = self.ocr.extract_text(frame)
-        
-        # Highlight text areas in the frame
-        highlighted_frame, _ = self.ocr.highlight_text_areas(frame)
-        
-        # If text was found, speak it
-        if text and len(text) > 3:  # Ensure there's meaningful text
-            self.speech.speak(f"I see text that says: {text}")
+        try:
+            # Store the frame time to avoid repeated OCR on same frame
+            current_time = time.time()
+            if hasattr(self, 'last_ocr_time') and current_time - self.last_ocr_time < 3:
+                # Just return the previously highlighted frame if available
+                if hasattr(self, 'last_highlighted_frame'):
+                    return self.last_highlighted_frame
+                return frame
+                
+            self.last_ocr_time = current_time
             
-        return highlighted_frame
+            # Log OCR processing
+            logging.info("Processing OCR on current frame")
+            
+            # Extract text from the frame with enhanced processing and AI-based OCR fallback
+            text = self.ocr.extract_text(frame, preprocess=True, use_enhanced_ocr=True)
+            
+            # Highlight text areas in the frame with confidence visualization
+            highlighted_frame, text_boxes = self.ocr.highlight_text_areas(frame, confidence_threshold=50, show_confidence=True)
+            
+            # Store the highlighted frame
+            self.last_highlighted_frame = highlighted_frame
+            
+            # Log the extracted text
+            logging.info(f"OCR extracted text: '{text}'")
+            
+            # If text was found, speak it
+            if text and len(text) > 3:  # Ensure there's meaningful text
+                # Avoid speaking the same text repeatedly
+                if not hasattr(self, 'last_spoken_text') or text != self.last_spoken_text:
+                    self.speech.speak(f"I see text that says: {text}")
+                    self.last_spoken_text = text
+                    # Add text overlay to the frame
+                    cv2.putText(highlighted_frame, "OCR: " + text[:50], (10, highlighted_frame.shape[0] - 20), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            else:
+                # If no text found after 2 seconds, provide feedback
+                if hasattr(self, 'ocr_mode_start_time') and current_time - self.ocr_mode_start_time > 2:
+                    if not hasattr(self, 'no_text_spoken') or not self.no_text_spoken:
+                        self.speech.speak("No readable text detected in view.")
+                        self.no_text_spoken = True
+                        
+            return highlighted_frame
+            
+        except Exception as e:
+            logging.error(f"Error in OCR processing: {e}")
+            return frame
     
     def run(self):
         """Run the main application loop"""
@@ -383,8 +424,15 @@ class SmartGoggles:
                 if self.current_mode == "ocr":
                     # Process frame with OCR
                     display_frame = self.process_ocr(frame)
-                    # Reset mode after OCR
-                    self.current_mode = "normal"
+                    # Don't reset mode immediately - allow for multiple frames of OCR processing
+                    # The mode will be reset after 5 seconds
+                    if not hasattr(self, 'ocr_mode_start_time'):
+                        self.ocr_mode_start_time = time.time()
+                    elif time.time() - self.ocr_mode_start_time > 5:  # 5 second OCR mode
+                        self.current_mode = "normal"
+                        self.speech.speak("Exiting OCR mode.")
+                        if hasattr(self, 'ocr_mode_start_time'):
+                            delattr(self, 'ocr_mode_start_time')
                 else:
                     # Run object detection
                     detections, annotated_frame = self.object_detector.detect_objects(frame)
@@ -415,22 +463,22 @@ class SmartGoggles:
                                     break
                     
                     # Alert if objects are too close, but exclude people (known or unknown)
-                    # if proximity_objects and not known_person_close:
-                    #     close_object_labels = [obj["label"] for obj in proximity_objects]
+                    if proximity_objects and not known_person_close:
+                        close_object_labels = [obj["label"] for obj in proximity_objects]
                         
-                    #     # Filter out any labels containing "person"
-                    #     non_person_labels = [label for label in close_object_labels if "person" not in label.lower()]
-                    #     unique_labels = list(set(non_person_labels))
+                        # Filter out any labels containing "person"
+                        non_person_labels = [label for label in close_object_labels if "person" not in label.lower()]
+                        unique_labels = list(set(non_person_labels))
                         
-                    #     # Only issue warnings for non-person objects
-                    #     if unique_labels:
-                    #         if len(unique_labels) == 1:
-                    #             self.speech.speak(f"Warning! A {unique_labels[0]} is very close to you!", priority=True)
-                    #         else:
-                    #             self.speech.speak("Warning! There are objects very close to you!", priority=True)
+                        # Only issue warnings for non-person objects
+                        if unique_labels:
+                            if len(unique_labels) == 1:
+                                self.speech.speak(f"Warning! A {unique_labels[0]} is very close to you!", priority=True)
+                            else:
+                                self.speech.speak("Warning! There are objects very close to you!", priority=True)
                     
-                    # # Store current faces for voice commands
-                    # self.current_faces = face_results
+                    # Store current faces for voice commands
+                    self.current_faces = face_results
                 
                 # Add command instructions to the frame
                 display_frame = self.add_command_overlay(display_frame)
@@ -444,12 +492,27 @@ class SmartGoggles:
                 if key == ord('q'):  # Quit
                     break
                 elif key == ord('o'):  # Object detection
+                    if self.current_mode == "ocr":
+                        self.current_mode = "normal"
+                        self.speech.speak("Exiting OCR mode.")
+                        if hasattr(self, 'ocr_mode_start_time'):
+                            delattr(self, 'ocr_mode_start_time')
                     self.describe_center_objects()
                 elif key == ord('f'):  # Face recognition
+                    if self.current_mode == "ocr":
+                        self.current_mode = "normal"
+                        self.speech.speak("Exiting OCR mode.")
+                        if hasattr(self, 'ocr_mode_start_time'):
+                            delattr(self, 'ocr_mode_start_time')
                     self.describe_faces()
                 elif key == ord('r'):  # Read text (OCR)
                     self.current_mode = "ocr"
                     self.speech.speak("Switching to OCR mode. Reading text.")
+                    self.ocr_mode_start_time = time.time()
+                    if hasattr(self, 'no_text_spoken'):
+                        delattr(self, 'no_text_spoken')
+                    if hasattr(self, 'last_spoken_text'):
+                        delattr(self, 'last_spoken_text')
                 elif key == ord('s'):  # Scene description
                     self.describe_scene()
                 elif key == ord('e'):  # Emergency
