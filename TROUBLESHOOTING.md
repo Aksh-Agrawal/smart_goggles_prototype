@@ -14,9 +14,13 @@ If the scene description feature isn't working with the Gemini API:
 2. **Update Your .env File**:
 
    - Open the `.env` file in the project root
-   - Replace the `GEMINI_API_KEY` value with your newly generated key:
+   - Replace the `OPENAI_API_KEY` value with your newly generated key:
      ```
-     GEMINI_API_KEY=your_actual_api_key_here
+     OPENAI_API_KEY=your_actual_api_key_here
+     ```
+   - Set the vision model type in .env:
+     ```
+     VISION_MODEL=gemini  # or 'openai' if using OpenAI
      ```
 
 3. **Check Logs for Errors**:
@@ -84,25 +88,54 @@ If emergency alerts (email/SMS) aren't working:
    - Check the console for detailed logs about the sending process
    - Look for specific error messages that may indicate what's wrong
 
+## Object Detection Issues
+
+1. **Objects Not Being Detected**:
+
+   - Check lighting conditions - ensure there is sufficient light
+   - Make sure objects are within the camera's field of view
+   - Try adjusting the confidence threshold in `.env`:
+     ```
+     CONFIDENCE_THRESHOLD=0.4  # Lower the threshold to detect more objects
+     ```
+   - Press 'C' to toggle the center region visualization to see what counts as "in front of you"
+
+2. **Voice Commands Not Detecting Objects**:
+
+   - Speak clearly using phrases like "detect objects", "what do you see", or "identify objects"
+   - Make sure the microphone is working and has proper permissions
+   - Check that objects are in the center region (toggle with 'C' key to visualize)
+
+3. **Wrong Object Labels**:
+
+   - The default YOLOv8n model has limitations - consider using a larger model:
+     ```
+     YOLO_MODEL=yolov8m.pt  # Medium-sized model with better accuracy
+     ```
+   - Custom objects may not be recognized if not in the COCO dataset
+
 ## General Debugging Tips
 
 1. **Check Log Messages**:
 
-   - The app now has extensive logging for easier troubleshooting
-   - Look for ERROR and WARNING level messages in the console
+   - The app has extensive logging for easier troubleshooting
+   - Look for ERROR and WARNING level messages in the console and smart_goggles.log file
 
 2. **Verify Environment Variables**:
 
    - Make sure your `.env` file is in the project root directory
    - Ensure there are no typos in the variable names
+   - See `.env.example` for the correct format and required variables
 
 3. **Test Services Separately**:
 
    - Try sending a test email using a simple Python script
-   - Test your Gemini API key in Google's AI Studio
+   - Test your API keys in their respective platforms (Google AI Studio, OpenAI, Azure, etc.)
+   - Test camera using another application
 
 4. **Network Connectivity**:
-   - Ensure your computer has internet access
+   - Ensure your computer has internet access for cloud-based features
+   - Check firewall settings if API calls are failing
    - Check if any firewalls are blocking outgoing connections
 
 If you continue experiencing issues after following these steps, please check the console output for specific error messages and refer to the relevant API documentation.

@@ -15,7 +15,7 @@ If you're experiencing issues with the emergency alert system in Smart Goggles, 
 
 2. **Check Email Configuration**:
 
-   - Ensure your `.env` file has these settings correctly filled:
+   - Ensure your `.env` file has these settings correctly filled (see the `.env.example` file for reference):
      ```
      EMAIL_SENDER=your_gmail@gmail.com
      EMAIL_PASSWORD=your_app_password_here

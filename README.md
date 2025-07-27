@@ -49,6 +49,7 @@ smart_goggles_prototype/
 3. Tesseract OCR installed (for text recognition)
 4. The following API keys (optional, for enhanced functionality):
    - Gemini Vision API key or OpenAI API key for scene descriptions
+   - Azure Computer Vision or AWS Textract for enhanced OCR
    - Twilio account credentials for SMS alerts
 
 ### Installation
@@ -56,7 +57,7 @@ smart_goggles_prototype/
 1. Clone the repository:
 
 ```
-git clone https://github.com/yourusername/smart_goggles_prototype.git
+git clone https://github.com/Aksh-Agrawal/smart_goggles_prototype.git
 cd smart_goggles_prototype
 ```
 
@@ -128,6 +129,7 @@ python main.py
 - **R** - Read text visible in the camera view using enhanced OCR with automatic text region detection
 - **S** - Provide an AI-generated description of the scene
 - **E** - Activate emergency mode with alerts
+- **C** - Toggle center region visualization (helps users understand what's "in front of them")
 - **H** - Display help screen with command instructions
 - **Q** - Quit the application
 
@@ -207,15 +209,22 @@ The Smart Goggles now include advanced OCR processing that:
 You can customize OCR behavior by editing the `.env` file:
 
 ```
-# OCR Service Selection (options: tesseract, azure, aws)
-OCR_SERVICE=tesseract
+# OCR Service Selection
+OCR_SERVICE=tesseract  # Options: 'tesseract', 'azure', 'aws'
+OCR_TEXT_PREPROCESSING=True  # Enable text preprocessing for better results
+OCR_CONFIDENCE_THRESHOLD=40  # Minimum confidence score for OCR results (0-100)
 
-# API Keys for cloud OCR (if using)
+# Azure Computer Vision OCR
 AZURE_VISION_KEY=your_key_here
-AZURE_VISION_ENDPOINT=your_endpoint_here
-AWS_ACCESS_KEY=your_key_here
-AWS_SECRET_KEY=your_secret_here
+AZURE_VISION_ENDPOINT=https://your-region.api.cognitive.microsoft.com/
+
+# AWS Textract OCR
+AWS_ACCESS_KEY=your_access_key_here
+AWS_SECRET_KEY=your_secret_key_here
+AWS_REGION=us-east-1
 ```
+
+For detailed information on OCR features and troubleshooting, see the [OCR_IMPROVEMENTS.md](OCR_IMPROVEMENTS.md) and [OCR_TROUBLESHOOTING.md](OCR_TROUBLESHOOTING.md) files.
 
 ## Troubleshooting
 
@@ -256,7 +265,9 @@ AWS_SECRET_KEY=your_secret_here
 4. **Customizable Keyboard Layout**: Allow users to configure their preferred key bindings
 5. **Offline Support**: Implement offline models for core functionality
 6. **Accessibility Options**: Add support for alternative input methods (e.g., joystick, special controllers)
-7. **Voice Command Option**: Re-introduce improved voice commands as an alternative to keyboard input
+7. **Voice Command Improvements**: Enhanced voice command recognition with more natural language patterns
+8. **Text Translation**: Add capability to translate detected text into user's preferred language
+9. **Enhanced Text Detection**: Further improve text detection in complex environments
 
 ## License
 
@@ -268,4 +279,14 @@ This project is open-source and available under the MIT License.
 - [OpenCV](https://opencv.org/)
 - [face_recognition](https://github.com/ageitgey/face_recognition)
 - [pyttsx3](https://github.com/nateshmbhat/pyttsx3)
+- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract)
+- [Azure Computer Vision](https://azure.microsoft.com/en-us/services/cognitive-services/computer-vision/)
+- [AWS Textract](https://aws.amazon.com/textract/)
+
+## Additional Documentation
+
+- [OCR Improvements](OCR_IMPROVEMENTS.md) - Details about the enhanced OCR capabilities
+- [OCR Troubleshooting](OCR_TROUBLESHOOTING.md) - Help for common OCR issues
+- [Emergency Alerts Help](EMERGENCY_ALERTS_HELP.md) - Setting up and using emergency alerts
+- [Troubleshooting](TROUBLESHOOTING.md) - General troubleshooting guide
 - [pytesseract](https://github.com/madmaze/pytesseract)
